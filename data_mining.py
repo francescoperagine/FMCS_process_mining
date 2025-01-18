@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pm4py.objects.log.util import dataframe_utils
 from pm4py.objects.conversion.log import converter as log_converter
 from pm4py.algo.discovery.alpha import algorithm as alpha_miner
 from pm4py.algo.discovery.inductive import algorithm as inductive_miner
@@ -10,102 +9,56 @@ from pm4py.algo.discovery.ilp import algorithm as ilp_miner
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from pm4py.objects.conversion.process_tree import converter as pt_converter
 from pm4py.statistics.traces.generic.log import case_statistics
-from pm4py.algo.evaluation.replay_fitness import algorithm as replay_fitness
-from pm4py.statistics.start_activities.log import get as start_activities
-from pm4py.statistics.end_activities.log import get as end_activities
-from pm4py.objects.petri_net.utils import reachability_graph
 
-from sklearn.preprocessing import KBinsDiscretizer
+import numpy as np
 
 class ProcessLogPreprocessor:
     def __init__(self, data_path):
         self.data_path = data_path
         self.df = None
-        self.discretizers = {}
         
     def load_data(self):
-        self.df = pd.read_csv(self.data_path)
+        # Read txt file with proper regex separator for whitespace
+        self.df = pd.read_table(
+            self.data_path, 
+            sep=r'\s+',
+            names=['date', 'time', 'location', 'action', 'activity']
+        )
+        # Combine date and time columns
+        self.df['timestamp'] = pd.to_datetime(self.df['date'] + ' ' + self.df['time'])
         return self
         
     def clean_data(self):
-        """Use data-driven discretization"""
         if self.df is None:
             self.load_data()
             
-        # Keep essential features that show clear patterns
-        columns_to_keep = ['accidents', 'traffic_density', 'rain_intensity', 'time_of_day']
-        self.df = self.df[columns_to_keep]
+        # Keep essential columns
+        self.df = self.df[['timestamp', 'location', 'action', 'activity']]
         
-        # Create discretizers for numeric columns
-        for col in ['accidents', 'traffic_density', 'rain_intensity']:
-            self.discretizers[col] = KBinsDiscretizer(
-                n_bins=4,  # Create quartile-based bins
-                encode='ordinal',
-                strategy='quantile'
-            )
-            self.df[f'{col}_bin'] = self.discretizers[col].fit_transform(
-                self.df[[col]]
-            ).astype(int)
-            
-        # Create meaningful time periods (6-hour windows)
-        self.df['time_period'] = pd.cut(
-            self.df['time_of_day'],
-            bins=[0, 6, 12, 18, 24],
-            labels=['NIGHT', 'MORNING', 'AFTERNOON', 'EVENING']
+        # Create more meaningful activity labels
+        self.df['activity_label'] = (
+            self.df['location'] + '_' + 
+            self.df['action'] + '_' + 
+            self.df['activity']
         )
         
         return self
         
-    def create_activity_labels(self):
-        """Create activity labels based on statistical patterns"""
-        def get_activity_label(row):
-            # Get severity level based on accidents quartile
-            severity_map = {
-                0: 'LOW',
-                1: 'MEDIUM_LOW',
-                2: 'MEDIUM_HIGH',
-                3: 'HIGH'
-            }
-            severity = severity_map[row['accidents_bin']]
-            
-            # Combine conditions only when they're significant
-            conditions = []
-            
-            # Add traffic condition if it's in upper two quartiles
-            if row['traffic_density_bin'] >= 2:
-                traffic_level = 'HIGH' if row['traffic_density_bin'] == 3 else 'MODERATE'
-                conditions.append(f'TRAFFIC_{traffic_level}')
-            
-            # Add rain condition if it's in upper two quartiles
-            if row['rain_intensity_bin'] >= 2:
-                rain_level = 'HEAVY' if row['rain_intensity_bin'] == 3 else 'MODERATE'
-                conditions.append(f'RAIN_{rain_level}')
-            
-            # Add time period always
-            conditions.append(str(row['time_period']))
-            
-            # Combine into final activity label
-            return f'ACCIDENTS_{severity}_' + '_'.join(conditions)
-        
-        self.df['activity'] = self.df.apply(get_activity_label, axis=1)
-        return self
-        
     def prepare_event_log(self):
-        """Create cases based on time sequences with proper filtering"""
-        # Create 6-hour cases aligned with time periods
-        self.df['time_block'] = (self.df['time_of_day'] // 6).astype(int)
-        self.df['case:concept:name'] = 'case_' + self.df['time_block'].astype(str)
-        self.df['concept:name'] = self.df['activity']
-        self.df['time:timestamp'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(self.df['time_of_day'], unit='h')
+        """Create event log with clear cases based on time windows"""
+        if self.df is None:
+            self.clean_data()
+            
+        # Create cases based on time windows (e.g., one case per day)
+        self.df['date'] = self.df['timestamp'].dt.date
+        self.df['case:concept:name'] = 'day_' + self.df['date'].astype(str)
         
-        # Filter based on activity sequences, not just frequency
-        sequence_counts = self.df.groupby('case:concept:name')['activity'].agg(list).apply(tuple).value_counts()
-        common_sequences = sequence_counts[sequence_counts >= 2].index
+        # Prepare columns for PM4Py
+        self.df['concept:name'] = self.df['activity_label']
+        self.df['time:timestamp'] = self.df['timestamp']
         
-        # Keep only cases that follow common sequences
-        valid_cases = self.df.groupby('case:concept:name')['activity'].agg(tuple).isin(common_sequences)
-        valid_cases = valid_cases[valid_cases].index
-        self.df = self.df[self.df['case:concept:name'].isin(valid_cases)]
+        # Sort by timestamp
+        self.df = self.df.sort_values('time:timestamp')
         
         # Create event log
         event_log = log_converter.apply(self.df)
@@ -194,7 +147,7 @@ def plot_metrics_comparison(all_metrics):
     plt.figure(figsize=(12, 6))
     
     metrics = ['fitness', 'precision', 'generalization', 'simplicity']
-    miners = list(all_metrics.keys())
+    # miners = list(all_metrics.keys())
     x = np.arange(len(metrics))
     width = 0.25
     
@@ -213,16 +166,13 @@ def plot_metrics_comparison(all_metrics):
     return plt.gcf()
 
 def main():
-    data_path = os.path.join('data', 'raw', 'traffic_accidents', 'traffic_accidents.csv')
+    data_path = os.path.join('data', 'raw', 'tm001.txt')
     image_path = os.path.join('resources', 'figures')
     os.makedirs(image_path, exist_ok=True)
     
     # Preprocess data
     preprocessor = ProcessLogPreprocessor(data_path)
-    event_log = (preprocessor.load_data()
-                            .clean_data()
-                            .create_activity_labels()
-                            .prepare_event_log())
+    event_log = preprocessor.prepare_event_log()
     
     # Print initial log statistics
     print("\nLog Statistics:")
