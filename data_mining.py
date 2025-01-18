@@ -1,222 +1,215 @@
 import os
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+
+from pm4py.objects.log.importer.xes import importer as xes_importer
+from pm4py.objects.conversion.log import converter as log_converter
+
 from pm4py.objects.conversion.log import converter as log_converter
 from pm4py.algo.discovery.alpha import algorithm as alpha_miner
 from pm4py.algo.discovery.inductive import algorithm as inductive_miner
+from pm4py.algo.discovery.heuristics import algorithm as heuristics_miner
 from pm4py.algo.discovery.ilp import algorithm as ilp_miner
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from pm4py.objects.conversion.process_tree import converter as pt_converter
-from pm4py.statistics.traces.generic.log import case_statistics
 
-import numpy as np
+# Evaluation metrics
+from pm4py.algo.evaluation.replay_fitness import algorithm as fitness
+from pm4py.algo.evaluation.precision import algorithm as precision
+from pm4py.algo.evaluation.simplicity import algorithm as simplicity
+from pm4py.algo.evaluation.generalization import algorithm as generalization
 
-class ProcessLogPreprocessor:
-    def __init__(self, data_path):
-        self.data_path = data_path
-        self.df = None
-        
-    def load_data(self):
-        # Read txt file with proper regex separator for whitespace
-        self.df = pd.read_table(
-            self.data_path, 
-            sep=r'\s+',
-            names=['date', 'time', 'location', 'action', 'activity']
-        )
-        # Combine date and time columns
-        self.df['timestamp'] = pd.to_datetime(self.df['date'] + ' ' + self.df['time'])
-        return self
-        
-    def clean_data(self):
-        if self.df is None:
-            self.load_data()
-            
-        # Keep essential columns
-        self.df = self.df[['timestamp', 'location', 'action', 'activity']]
-        
-        # Create more meaningful activity labels
-        self.df['activity_label'] = (
-            self.df['location'] + '_' + 
-            self.df['action'] + '_' + 
-            self.df['activity']
-        )
-        
-        return self
-        
-    def prepare_event_log(self):
-        """Create event log with clear cases based on time windows"""
-        if self.df is None:
-            self.clean_data()
-            
-        # Create cases based on time windows (e.g., one case per day)
-        self.df['date'] = self.df['timestamp'].dt.date
-        self.df['case:concept:name'] = 'day_' + self.df['date'].astype(str)
-        
-        # Prepare columns for PM4Py
-        self.df['concept:name'] = self.df['activity_label']
-        self.df['time:timestamp'] = self.df['timestamp']
-        
-        # Sort by timestamp
-        self.df = self.df.sort_values('time:timestamp')
-        
-        # Create event log
-        event_log = log_converter.apply(self.df)
-        return event_log
-    
-class ProcessMiner:
-    def __init__(self, event_log):
-        self.event_log = event_log
-        self.net = None
-        self.initial_marking = None
-        self.final_marking = None
-        
-    def calculate_quality_metrics(self):
-        """Calculate metrics using PM4Py's built-in methods"""
-        from pm4py.algo.evaluation.replay_fitness import algorithm as replay_fitness
-        from pm4py.algo.evaluation.precision import algorithm as precision_evaluator
-        from pm4py.algo.evaluation.generalization import algorithm as generalization_evaluator
-        from pm4py.algo.evaluation.simplicity import algorithm as simplicity_evaluator
+# text_to_csv.py
+import csv
 
-        metrics = {}
-        
-        try:
-            # Fitness
-            fitness = replay_fitness.apply(self.event_log, self.net, 
-                                        self.initial_marking, self.final_marking,
-                                        variant=replay_fitness.Variants.TOKEN_BASED)
-            metrics['fitness'] = fitness['average_trace_fitness']
-            
-            # Precision - using ETConformance
-            metrics['precision'] = precision_evaluator.apply(self.event_log, self.net,
-                                                        self.initial_marking, 
-                                                        self.final_marking,
-                                                        variant=precision_evaluator.Variants.ETCONFORMANCE_TOKEN)
-            
-            # Generalization
-            metrics['generalization'] = generalization_evaluator.apply(self.event_log, 
-                                                                    self.net,
-                                                                    self.initial_marking,
-                                                                    self.final_marking)
-            
-            # Simplicity
-            metrics['simplicity'] = simplicity_evaluator.apply(self.net)
-        except Exception as e:
-            print(f"Error calculating metrics: {str(e)}")
-            metrics = {
-                'fitness': 0.0,
-                'precision': 0.0,
-                'generalization': 0.0,
-                'simplicity': 0.0
-            }
-        
-        return metrics
-        
-    def save_visualization(self, path, filename):
-        if not all([self.net, self.initial_marking, self.final_marking]):
-            raise ValueError("Model not yet mined")
-            
-        gviz = pn_visualizer.apply(self.net, self.initial_marking, self.final_marking,
-                                parameters={
-                                    pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png",
-                                    "show_labels": True
-                                })
-        pn_visualizer.save(gviz, os.path.join(path, filename))
+from pm4py.objects.log.obj import EventLog, Trace, Event
+from pm4py.objects.log.exporter.xes import exporter as xes_exporter
 
-class AlphaMiner(ProcessMiner):
-    def mine(self):
-        """Apply Alpha miner"""
-        self.net, self.initial_marking, self.final_marking = alpha_miner.apply(self.event_log)
-        return self
+def txt_to_xes(input_file, output_file):
+    """
+    Converts a text file to an XES event log format for process mining.
 
-class InductiveMiner(ProcessMiner):
-    def mine(self):
-        """Apply Inductive miner"""
-        tree = inductive_miner.apply(self.event_log)
-        self.net, self.initial_marking, self.final_marking = pt_converter.apply(tree)
-        return self
+    Args:
+        input_file (str): Path to the input text file.
+        output_file (str): Path to the output XES file.
+    """
+    # Initialize an empty event log
+    log = EventLog()
 
-class ILPMiner(ProcessMiner):
-    def mine(self):
-        """Apply ILP miner"""
-        self.net, self.initial_marking, self.final_marking = ilp_miner.apply(self.event_log)
-        return self
-    
-def plot_metrics_comparison(all_metrics):
-    """Plot the four quality metrics for each miner"""
-    plt.figure(figsize=(12, 6))
-    
-    metrics = ['fitness', 'precision', 'generalization', 'simplicity']
-    # miners = list(all_metrics.keys())
-    x = np.arange(len(metrics))
-    width = 0.25
-    
-    for i, (miner, miner_metrics) in enumerate(all_metrics.items()):
-        values = [miner_metrics[metric] for metric in metrics]
-        offset = width * i
-        plt.bar(x + offset, values, width, label=miner)
-    
-    plt.ylabel('Score')
-    plt.title('Process Mining Quality Metrics')
-    plt.xticks(x + width, metrics, rotation=45)
-    plt.legend()
-    
-    plt.ylim(0, 1)
-    plt.tight_layout()
-    return plt.gcf()
+    # Read the text file
+    with open(input_file, 'r') as infile:
+        lines = infile.readlines()
 
-def main():
-    data_path = os.path.join('data', 'raw', 'tm001.txt')
-    image_path = os.path.join('resources', 'figures')
-    os.makedirs(image_path, exist_ok=True)
+    # Group events by trace (example: one trace for simplicity)
+    trace = Trace()  # Create a single trace
+    for idx, line in enumerate(lines, start=1):
+        parts = line.strip().split()
+        timestamp = parts[0] + " " + parts[1]
+        location = parts[2]
+        state = parts[3]
+        activity = parts[4]
+
+        # Create an event
+        event = Event({
+            "concept:name": activity,
+            "time:timestamp": timestamp,
+            "org:resource": location,
+            "state": state,
+            "case:concept:name": f"Case_{idx}"  # Assign a case ID
+        })
+
+        # Add event to the trace
+        trace.append(event)
+
+    # Add the trace to the log
+    log.append(trace)
+
+    # Export the event log to XES
+    xes_exporter.apply(log, output_file)
+    print(f"Data successfully converted to {output_file}")
+
+def load_and_process_xes(file_path):
+    """
+    Load and process an XES log file into a pandas DataFrame and structured event log.
+    """
+    # Load the XES log using PM4Py
+    event_log = xes_importer.apply(file_path)
+
+    # Convert the XES event log to a pandas DataFrame
+    df = log_converter.apply(event_log, variant=log_converter.Variants.TO_DATA_FRAME)
+    df['time:timestamp'] = pd.to_datetime(df['timestamp']).dt.strftime('%Y-%m-%d %H:%M:%S.%f')
+
+    # Process the DataFrame
+    # Simplify activity label
+    df['activity_label'] = df['org:resource'] + '_' + df['state']
     
-    # Preprocess data
-    preprocessor = ProcessLogPreprocessor(data_path)
-    event_log = preprocessor.prepare_event_log()
+    # Create cases based on hour windows
+    df['hour'] = pd.to_datetime(df['time:timestamp']).dt.strftime('%Y-%m-%d_%H')
+    df['case:concept:name'] = 'hour_' + df['hour']
     
-    # Print initial log statistics
-    print("\nLog Statistics:")
-    variants = case_statistics.get_variant_statistics(event_log)
-    print(f"Number of cases: {len(event_log)}")
-    print(f"Number of variants: {len(variants)}")
-    print(f"Number of unique activities: {len(set(trace[0]['concept:name'] for trace in event_log))}")
+    # Sort by timestamp
+    df = df.sort_values('time:timestamp')
+
+    # Prepare for PM4Py (if needed again later)
+    event_log = log_converter.apply(df)
     
-    # Initialize miners
-    miners_dict = {
-        'Alpha': AlphaMiner(event_log),
-        'Inductive': InductiveMiner(event_log),
-        'ILP': ILPMiner(event_log)
+    return df, event_log
+
+def calculate_metrics(event_log, net, initial_marking, final_marking):
+    """Calculate all four metrics for a given model"""
+    metrics = {}
+    
+    # Fitness
+    fitness_value = fitness.apply(event_log, net, initial_marking, final_marking, variant=fitness.Variants.TOKEN_BASED)
+    metrics['fitness'] = fitness_value['average_trace_fitness']
+    
+    # Precision
+    metrics['precision'] = precision.apply(event_log, net, initial_marking, final_marking, variant=precision.Variants.ETCONFORMANCE_TOKEN)
+    
+    # Simplicity
+    metrics['simplicity'] = simplicity.apply(net)
+    
+    # Generalization
+    metrics['generalization'] = generalization.apply(event_log, net, initial_marking, final_marking)
+    
+    return metrics
+
+def apply_miners(event_log):
+    """Apply all three miners and collect their metrics"""
+    results = {}
+    
+    # Alpha Miner
+    print("\nApplying Alpha Miner...")
+    net, initial_marking, final_marking = alpha_miner.apply(event_log)
+    results['Alpha'] = {
+        'model': (net, initial_marking, final_marking),
+        'metrics': calculate_metrics(event_log, net, initial_marking, final_marking)
+    }
+
+    # Heuristics Miner
+    print("\nApplying Heuristics Miner...")
+    net, initial_marking, final_marking = heuristics_miner.apply(event_log)
+    results['Heuristics'] = {
+        'model': (net, initial_marking, final_marking),
+        'metrics': calculate_metrics(event_log, net, initial_marking, final_marking)
     }
     
-    # Dictionary to store all metrics
-    all_metrics = {}
+    # Inductive Miner
+    print("\nApplying Inductive Miner...")
+    tree = inductive_miner.apply(event_log)
+    net, initial_marking, final_marking = pt_converter.apply(tree)
+    results['Inductive'] = {
+        'model': (net, initial_marking, final_marking),
+        'metrics': calculate_metrics(event_log, net, initial_marking, final_marking)
+    }
     
-    # Apply mining and collect metrics
-    for name, miner in miners_dict.items():
-        print(f"\nApplying {name} Miner...")
-        miner.mine()
-        
-        # Calculate quality metrics
-        quality_metrics = miner.calculate_quality_metrics()
-        all_metrics[name] = quality_metrics
-        
-        # Save visualization
-        miner.save_visualization(image_path, f"petri_net_{name.lower()}.png")
-        
-        # Print metrics and properties
-        print(f"\n{name} Miner Metrics:")
-        for metric, value in quality_metrics.items():
-            print(f"{metric}: {value:.3f}")
-            
-        print(f"\n{name} Miner Properties:")
-        print(f"Places: {len(miner.net.places)}")
-        print(f"Named Transitions: {sum(1 for t in miner.net.transitions if t.label is not None)}")
-        print(f"Silent Transitions: {sum(1 for t in miner.net.transitions if t.label is None)}")
+    return results
+
+def display_comparison(results):
+    """Display a comparison of all metrics for all miners"""
+    print("\nMetrics Comparison:")
+    print("-" * 50)
+    print(f"{'Miner':<12} {'Fitness':>8} {'Precision':>10} {'Simplicity':>10} {'Gen.':>8}")
+    print("-" * 50)
     
-    # Plot comparative metrics
-    fig = plot_metrics_comparison(all_metrics)
-    plt.savefig(os.path.join(image_path, 'metrics_comparison.png'))
-    plt.close()
+    for miner_name, miner_results in results.items():
+        metrics_values = miner_results['metrics']
+        print(f"{miner_name:<12} "
+              f"{metrics_values['fitness']:8.3f} "
+              f"{metrics_values['precision']:10.3f} "
+              f"{metrics_values['simplicity']:10.3f} "
+              f"{metrics_values['generalization']:8.3f}")
+    print("-" * 50)
+
+def save_visualizations(results):
+    """Save visualizations for all miners"""
+
+    # Create resources/figures directory if it doesn't exist
+    output_dir = os.path.join('resources', 'figures')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for miner_name, miner_results in results.items():
+        net, initial_marking, final_marking = miner_results['model']
+        gviz = pn_visualizer.apply(
+            net, initial_marking, final_marking,
+            parameters={
+                pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png",
+                "rankdir": "LR"  # Left to right layout
+            }
+        )
+        output_path = os.path.join(output_dir, f"petri_net_{miner_name.lower()}.png")
+        pn_visualizer.save(gviz, output_path)
+        print(f"Saved visualization for {miner_name} Miner to: {output_path}")
+
+def main():
+
+    # File paths
+    input_file = os.path.join('data', 'raw', 'tm001.txt')
+    output_file = os.path.join('data', 'processed', 'dataset.xes')
+    figures_path = os.path.join('resources', 'figures')
+
+    # Convert to XES
+    txt_to_xes(input_file, output_file)
+    
+    # Process the log
+    print("Loading and processing log file...")
+    df, event_log = load_and_process_xes(output_file)
+    print(df.head())
+
+    # Count the number of events per case
+    case_counts = df['case:concept:name'].value_counts()
+    print(case_counts)
+
+    # Plot activity frequencies
+    df['concept:name'].value_counts().plot(kind='bar')
+
+    # Apply miners and get results
+    results = apply_miners(event_log)
+    
+    # Display comparison
+    display_comparison(results)
+    
+    # Save visualizations
+    save_visualizations(results, figures_path)
 
 if __name__ == "__main__":
     main()
