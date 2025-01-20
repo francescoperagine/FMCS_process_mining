@@ -1,0 +1,120 @@
+Frequency: 2
+Sequence: Drink
+
+Frequency: 2
+Sequence: Cook
+
+Frequency: 2
+Sequence: Eat
+
+Frequency: 2
+Sequence: Personal_Hygiene
+
+Frequency: 2
+Sequence: Housekeeping
+
+Frequency: 2
+Sequence: Sleep
+
+Frequency: 1
+Sequence: Bed_Toilet_Transition -> Eat_Breakfast -> Other_Activity
+
+Frequency: 1
+Sequence: Bed_Toilet_Transition -> Toilet
+
+Frequency: 1
+Sequence: Bed_Toilet_Transition
+
+Frequency: 1
+Sequence: Cook -> Wash_Dishes
+
+Frequency: 1
+Sequence: Dress -> Cook_Breakfast
+
+Frequency: 1
+Sequence: Work_At_Desk -> Put_Groceries_Away -> Relax
+
+Frequency: 1
+Sequence: Cook_Lunch
+
+Frequency: 1
+Sequence: Toilet
+
+Frequency: 1
+Sequence: Cook_Dinner
+
+Frequency: 1
+Sequence: Dress -> Drink
+
+Frequency: 1
+Sequence: Cook_Dinner -> Eat_Dinner
+
+Frequency: 1
+Sequence: Read -> Wash_Dinner_Dishes
+
+Frequency: 1
+Sequence: Cook_Lunch -> Read -> Leave_Home
+
+Frequency: 1
+Sequence: Wash_Lunch_Dishes
+
+Frequency: 1
+Sequence: Read -> Housekeeping -> Cook_Lunch
+
+Frequency: 1
+Sequence: Shower -> Dress -> Other_Activity
+
+Frequency: 1
+Sequence: Eat_Breakfast -> Sleep_Out_Of_Bed
+
+Frequency: 1
+Sequence: Sleep -> Wash_Breakfast_Dishes
+
+Frequency: 1
+Sequence: Sleep -> Work_On_Computer
+
+Frequency: 1
+Sequence: Eat_Dinner
+
+Frequency: 1
+Sequence: Other_Activity -> Eat_Lunch -> Wash_Lunch_Dishes
+
+Frequency: 1
+Sequence: Enter_Home -> Sleep_Out_Of_Bed
+
+Frequency: 1
+Sequence: Read -> Enter_Home
+
+Frequency: 1
+Sequence: Enter_Home
+
+Frequency: 1
+Sequence: Personal_Hygiene -> Entertain_Guests
+
+Frequency: 1
+Sequence: Entertain_Guests -> Sleep
+
+Frequency: 1
+Sequence: Step_Out
+
+Frequency: 1
+Sequence: Leave_Home
+
+Frequency: 1
+Sequence: Leave_Home -> Other_Activity
+
+Frequency: 1
+Sequence: Read -> Sleep_Out_Of_Bed
+
+Frequency: 1
+Sequence: Sleep_Out_Of_Bed
+
+Frequency: 1
+Sequence: Wash_Dishes
+
+Frequency: 1
+Sequence: Watch_TV
+
+Frequency: 1
+Sequence: Work_On_Computer
+
