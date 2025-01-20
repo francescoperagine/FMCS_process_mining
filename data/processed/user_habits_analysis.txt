@@ -1,66 +1,117 @@
 Frequency: 2
+Sequence: Work_At_Table
+
+Frequency: 2
+Sequence: Personal_Hygiene
+
+Frequency: 2
 Sequence: Sleep
 
+Frequency: 2
+Sequence: Read
+
 Frequency: 1
-Sequence: Eat_Lunch
+Sequence: Cook_Breakfast -> Read
+
+Frequency: 1
+Sequence: Bed_Toilet_Transition -> Housekeeping -> Enter_Home
+
+Frequency: 1
+Sequence: Bed_Toilet_Transition -> Eat_Breakfast -> Dress
+
+Frequency: 1
+Sequence: Toilet -> Wash_Breakfast_Dishes
+
+Frequency: 1
+Sequence: Shower -> Eat_Lunch -> Cook -> Eat
 
 Frequency: 1
 Sequence: Cook
 
 Frequency: 1
-Sequence: Cook_Breakfast -> Read -> Entertain_Guests
+Sequence: Cook_Breakfast
 
 Frequency: 1
-Sequence: Cook_Dinner
+Sequence: Cook_Breakfast -> Wash_Dinner_Dishes
 
 Frequency: 1
-Sequence: Dress -> Cook_Lunch -> Other_Activity
+Sequence: Watch_TV -> Entertain_Guests -> Wash_Dinner_Dishes -> Sleep
 
 Frequency: 1
-Sequence: Dress -> Cook_Lunch
+Sequence: Cook_Dinner -> Eat_Dinner
 
 Frequency: 1
-Sequence: Drink -> Wash_Dinner_Dishes
+Sequence: Shower -> Cook_Dinner
 
 Frequency: 1
-Sequence: Relax -> Drink
+Sequence: Shower -> Housekeeping -> Cook_Lunch
+
+Frequency: 1
+Sequence: Step_Out -> Cook_Lunch
+
+Frequency: 1
+Sequence: Cook_Lunch -> Wash_Lunch_Dishes
+
+Frequency: 1
+Sequence: Cook_Lunch
+
+Frequency: 1
+Sequence: Step_Out -> Toilet -> Drink
+
+Frequency: 1
+Sequence: Work_On_Computer
+
+Frequency: 1
+Sequence: Other_Activity -> Drink
 
 Frequency: 1
 Sequence: Eat
 
 Frequency: 1
-Sequence: Eat_Dinner
+Sequence: Wash_Breakfast_Dishes -> Toilet
 
 Frequency: 1
-Sequence: Enter_Home
+Sequence: Eat_Breakfast
 
 Frequency: 1
-Sequence: Entertain_Guests
+Sequence: Eat_Dinner -> Wash_Dinner_Dishes
 
 Frequency: 1
-Sequence: Housekeeping
-
-Frequency: 1
-Sequence: Leave_Home
+Sequence: Read -> Leave_Home
 
 Frequency: 1
 Sequence: Other_Activity
 
 Frequency: 1
-Sequence: Personal_Hygiene
+Sequence: Work_At_Desk -> Enter_Home -> Put_Groceries_Away -> Relax
 
 Frequency: 1
-Sequence: Shower
+Sequence: Entertain_Guests
 
 Frequency: 1
-Sequence: Step_Out
+Sequence: Entertain_Guests -> Wash_Dishes -> Watch_TV
+
+Frequency: 1
+Sequence: Shower -> Housekeeping -> Watch_TV
+
+Frequency: 1
+Sequence: Leave_Home -> Work_On_Computer
+
+Frequency: 1
+Sequence: Leave_Home
+
+Frequency: 1
+Sequence: Relax
+
+Frequency: 1
+Sequence: Sleep_Out_Of_Bed -> Personal_Hygiene
+
+Frequency: 1
+Sequence: Sleep_Out_Of_Bed
 
 Frequency: 1
 Sequence: Wash_Breakfast_Dishes
 
 Frequency: 1
-Sequence: Work_At_Table
-
-Frequency: 1
-Sequence: Watch_TV
+Sequence: Wash_Dinner_Dishes
 
